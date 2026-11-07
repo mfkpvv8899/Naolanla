@@ -1,0 +1,57 @@
+name: Build Noa APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extrair o app do zip
+        run: |
+          ls -la
+          ZIP=$(ls -t ./*.zip 2>/dev/null | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "ERRO: nenhum arquivo .zip encontrado na raiz do repositório"
+            exit 1
+          fi
+          echo "Usando: $ZIP"
+          unzip -q "$ZIP" -d noa
+          FOUND=$(find noa -name settings.gradle.kts | head -n 1)
+          if [ -z "$FOUND" ]; then
+            echo "ERRO: settings.gradle.kts não encontrado dentro do zip"
+            find noa | head -n 30
+            exit 1
+          fi
+          echo "APP_DIR=$(dirname "$FOUND")" >> $GITHUB_ENV
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        run: |
+          cd "$APP_DIR"
+          echo "Pasta do app: $(pwd)"
+          ls
+          gradle assembleDebug --console=plain
+
+      - name: Copiar APK
+        run: cp "$APP_DIR/app/build/outputs/apk/debug/app-debug.apk" NoaLauncher.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NoaLauncher-apk
+          path: NoaLauncher.apk
